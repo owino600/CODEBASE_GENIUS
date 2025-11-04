@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 import subprocess
 from typing import Dict, List, Tuple
-import openai
+import requests
 
 st.set_page_config(page_title="Codebase Genius — Streamlit Frontend", layout="wide")
 
@@ -69,14 +69,16 @@ def render_tree(tree: Dict, depth=0) -> str:
 
 # ----------------------------- Documentation Generator -----------------------------------
 
-def generate_documentation_with_openai(content: str, api_key: str, language: str = "English") -> str:
-    openai.api_key = api_key
-    prompt = f"Generate structured {language} markdown documentation explaining the purpose, logic, and architecture of this codebase:\n\n{content}"
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
+def generate_documentation_backend(content: str, backend_url: str) -> str:
+    response = requests.post(
+        backend_url,
+        json={"content": content},
+        headers={"Content-Type": "application/json"},
+        timeout=180
     )
-    return response["choices"][0]["message"]["content"]
+    if response.status_code == 200:
+        return response.json().get("documentation", "No documentation generated.")
+    return f"Error: {response.status_code} - {response.text}"
 
 
 # ----------------------------- Main UI -----------------------------------
@@ -86,9 +88,9 @@ with st.sidebar:
     repo_url = st.text_input("GitHub repo URL or local folder path:")
     tmp_dir = st.text_input("Local clone folder (optional)", value="")
 
-    st.header("Options & LLM")
-    use_openai = st.checkbox("Use OpenAI API for documentation", value=False)
-    openai_key = st.text_input("OpenAI API Key", type="password") if use_openai else None
+    st.header("Options & Backend Integration")
+    use_backend = st.checkbox("Use Backend for Documentation", value=True)
+    backend_url = st.text_input("Backend API Endpoint", value="http://localhost:8000/generate-docs") if use_backend else None
 
     st.markdown("---")
     if st.button("Process Repository"):
@@ -120,16 +122,17 @@ else:
         st.text_area("Structure", value=render_tree(tree), height=300)
 
         st.markdown("### Documentation Generator")
-        if use_openai and openai_key:
-            st.info("Generating documentation using OpenAI...")
-            all_content = "\n\n".join(
-                open(f, encoding="utf-8", errors="ignore").read()
-                for f in Path(st.session_state.repo_root).rglob("*") if f.is_file()
-            )
-            doc = generate_documentation_with_openai(all_content, openai_key)
+        all_content = "\n\n".join(
+            open(f, encoding="utf-8", errors="ignore").read()
+            for f in Path(st.session_state.repo_root).rglob("*") if f.is_file()
+        )
+
+        if use_backend and backend_url:
+            st.info("Generating documentation through backend...")
+            doc = generate_documentation_backend(all_content, backend_url)
             st.subheader("Generated Documentation")
             st.markdown(doc)
         else:
-            st.warning("OpenAI integration is disabled. Enable it in the sidebar to generate full documentation.")
+            st.warning("Backend integration disabled. Please enable it in the sidebar.")
 
-        st.markdown("### Done — File tree and options restored successfully.")
+        st.markdown("### Done — File tree and backend integration restored successfully.")
