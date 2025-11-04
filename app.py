@@ -88,17 +88,16 @@ with st.sidebar:
     repo_url = st.text_input("GitHub repo URL or local folder path:")
     tmp_dir = st.text_input("Local clone folder (optional)", value="")
 
-    st.header("Options & Backend Integration")
-    use_backend = st.checkbox("Use Backend for Documentation", value=True)
-    backend_url = st.text_input("Backend API Endpoint", value="http://localhost:8000/generate-docs") if use_backend else None
+    use_openai = st.checkbox("Use OpenAI for Documentation", value=True)
+    backend_url = "http://localhost:8000/generate-docs" if use_openai else None
 
     st.markdown("---")
-    if st.button("Process Repository"):
+    if st.button("Generate Documentation"):
         st.session_state.start = True
 
 st.subheader("Codebase Genius — Multi-language Analyzer")
 if 'start' not in st.session_state:
-    st.info("Enter a repository URL or path in the sidebar, then click 'Process Repository'.")
+    st.info("Enter a repository URL or path in the sidebar, then click 'Generate Documentation'.")
 else:
     dest = tmp_dir or tempfile.mkdtemp(prefix="codegen_")
     if repo_url.startswith("http"):
@@ -127,12 +126,12 @@ else:
             for f in Path(st.session_state.repo_root).rglob("*") if f.is_file()
         )
 
-        if use_backend and backend_url:
-            st.info("Generating documentation through backend...")
+        if use_openai and backend_url:
+            st.info("Generating documentation using OpenAI...")
             doc = generate_documentation_backend(all_content, backend_url)
             st.subheader("Generated Documentation")
             st.markdown(doc)
         else:
-            st.warning("Backend integration disabled. Please enable it in the sidebar.")
+            st.warning("OpenAI integration disabled. Please enable it in the sidebar.")
 
-        st.markdown("### Done — File tree and backend integration restored successfully.")
+        st.markdown("### Done — File tree and documentation generated successfully.")
