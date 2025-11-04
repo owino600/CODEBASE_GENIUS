@@ -13,10 +13,17 @@ st.title("Codebase Genius — Streamlit Frontend")
 st.markdown(
     """
 This app reads and documents codebases in **multiple programming languages**. It clones repositories,
-parses source files (Python, JavaScript, Java, C/C++, Go, Rust, PHP, HTML, CSS, etc.), and generates
-structured Markdown documentation summarizing the project's logic, components, and relationships.
+parses source files (Python, JavaScript, Java, C/C++, Go, Rust, PHP, HTML, CSS, etc.), and sends the
+collected source to a documentation generator (usually backed by an LLM). The UI intentionally
+hides backend details from the user — they only toggle **Use OpenAI for Documentation** and
+receive a README-style output.
 """
 )
+
+# ----------------------------- Config ------------------------------------
+# Backend endpoint is kept internal; users don't see or edit it. Set environment
+# variable CODEGEN_BACKEND to override the default (useful for deployment).
+BACKEND_URL = os.getenv("CODEGEN_BACKEND", "http://localhost:8000/generate-docs")
 
 # ----------------------------- Utilities ---------------------------------
 
@@ -67,18 +74,31 @@ def render_tree(tree: Dict, depth=0) -> str:
     return s
 
 
-# ----------------------------- Documentation Generator -----------------------------------
+# ----------------------------- Documentation call ------------------------
 
-def generate_documentation_backend(content: str, backend_url: str) -> str:
-    response = requests.post(
-        backend_url,
-        json={"content": content},
-        headers={"Content-Type": "application/json"},
-        timeout=180
-    )
-    if response.status_code == 200:
-        return response.json().get("documentation", "No documentation generated.")
-    return f"Error: {response.status_code} - {response.text}"
+def generate_documentation_backend(content: str, output_style: str = "readme_full") -> Tuple[bool, str]:
+    """Send source bundle to backend. Returns (success, documentation_or_error)."""
+    payload = {
+        "content": content,
+        # output_style hints: 'readme_short', 'readme_full', 'api_reference'
+        "output_style": output_style,
+    }
+    try:
+        resp = requests.post(BACKEND_URL, json=payload, timeout=180)
+    except requests.exceptions.RequestException as e:
+        return False, f"Failed to connect to documentation backend: {e}"
+
+    if resp.status_code != 200:
+        return False, f"Backend error {resp.status_code}: {resp.text}"
+
+    try:
+        j = resp.json()
+        doc = j.get("documentation") or j.get("doc") or j.get("result")
+        if not doc:
+            return False, "Backend returned success but no documentation payload."
+        return True, doc
+    except Exception:
+        return False, "Backend returned non-JSON response or invalid format."
 
 
 # ----------------------------- Main UI -----------------------------------
@@ -88,8 +108,16 @@ with st.sidebar:
     repo_url = st.text_input("GitHub repo URL or local folder path:")
     tmp_dir = st.text_input("Local clone folder (optional)", value="")
 
-    use_openai = st.checkbox("Use OpenAI for Documentation", value=True)
-    backend_url = "http://localhost:8000/generate-docs" if use_openai else None
+    st.markdown("---")
+    st.header("Documentation Options")
+    use_openai = st.checkbox("Use OpenAI for Documentation (recommended)", value=True)
+    output_style = st.selectbox("Documentation style", options=[
+        ("readme_full", "Full README (detailed overview, install, usage, examples, architecture)"),
+        ("readme_short", "Short README (concise overview and usage)") ,
+        ("api_reference", "API reference (functions/classes list with doc summaries)")
+    ], index=0)
+    # `output_style` is a tuple because we want readable labels; pick the key
+    output_style = output_style[0]
 
     st.markdown("---")
     if st.button("Generate Documentation"):
@@ -121,17 +149,34 @@ else:
         st.text_area("Structure", value=render_tree(tree), height=300)
 
         st.markdown("### Documentation Generator")
-        all_content = "\n\n".join(
-            open(f, encoding="utf-8", errors="ignore").read()
-            for f in Path(st.session_state.repo_root).rglob("*") if f.is_file()
-        )
+        # Collect source files (skip large binaries) into a single string bundle
+        files = []
+        for f in Path(st.session_state.repo_root).rglob("*"):
+            if f.is_file() and f.suffix.lower() not in [".png", ".jpg", ".jpeg", ".gif", ".svg", ".exe", ".dll"]:
+                try:
+                    text = f.read_text(encoding="utf-8", errors="ignore")
+                    files.append({"path": str(f.relative_to(st.session_state.repo_root)), "content": text})
+                except Exception:
+                    files.append({"path": str(f.relative_to(st.session_state.repo_root)), "content": "<read error>"})
 
-        if use_openai and backend_url:
-            st.info("Generating documentation using OpenAI...")
-            doc = generate_documentation_backend(all_content, backend_url)
-            st.subheader("Generated Documentation")
-            st.markdown(doc)
+        # Prepare content payload: small summary + files list
+        bundle = {
+            "repo_name": Path(st.session_state.repo_root).name,
+            "files": files,
+        }
+
+        if use_openai:
+            st.info("Generating documentation (this may take a moment)...")
+            success, doc_or_err = generate_documentation_backend(bundle, output_style=output_style)
+            if not success:
+                st.error(doc_or_err)
+                st.info("Make sure your documentation backend is running and reachable at the configured endpoint.")
+            else:
+                st.subheader("Generated Documentation (README-style)")
+                st.markdown(doc_or_err)
+                # Provide a download button
+                st.download_button("Download docs.md", data=doc_or_err, file_name=f"{bundle['repo_name']}_README.md")
         else:
-            st.warning("OpenAI integration disabled. Please enable it in the sidebar.")
+            st.warning("OpenAI documentation is disabled. Toggle 'Use OpenAI for Documentation' to enable.")
 
-        st.markdown("### Done — File tree and documentation generated successfully.")
+        st.markdown("### Done — file tree displayed and documentation processing complete.")
