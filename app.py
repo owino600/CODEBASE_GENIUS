@@ -7,37 +7,41 @@ import subprocess
 from typing import Dict, List, Tuple
 import requests
 
-# Detect system theme (auto) and allow user toggle
-if "theme" not in st.session_state:
-    st.session_state.theme = "auto"
+# ----------------------------- Theme Toggle -----------------------------
 
-def get_theme():
-    if st.session_state.theme == "auto":
-        return "dark" if st.get_option("theme.base") == "dark" else "light"
-    return st.session_state.theme
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
 
-def set_theme(mode):
-    st.session_state.theme = mode
+def toggle_theme():
+    st.session_state.dark_mode = not st.session_state.dark_mode
 
-# Apply theme toggle to page
-page_theme = get_theme()
+# Set page config
 st.set_page_config(page_title="Codebase Genius — Streamlit Frontend", layout="wide", initial_sidebar_state="expanded")
 
-# Sidebar toggle for theme
-with st.sidebar:
-    st.markdown("### Appearance")
-    theme_choice = st.radio("Theme Mode", ["auto", "light", "dark"], index=["auto", "light", "dark"].index(st.session_state.theme), horizontal=True)
-    if theme_choice != st.session_state.theme:
-        set_theme(theme_choice)
-    st.markdown("---")
+# Theme switch button
+col1, col2 = st.columns([0.95, 0.05])
+with col2:
+    if st.button("🌙" if not st.session_state.dark_mode else "☀️"):
+        toggle_theme()
+
+page_bg = "#0E1117" if st.session_state.dark_mode else "#FFFFFF"
+text_color = "#FFFFFF" if st.session_state.dark_mode else "#000000"
+
+st.markdown(f"""
+    <style>
+    body {{ background-color: {page_bg}; color: {text_color}; }}
+    .stApp {{ background-color: {page_bg}; color: {text_color}; }}
+    </style>
+""", unsafe_allow_html=True)
+
+# ----------------------------- App Description -----------------------------
 
 st.title("Codebase Genius — Streamlit Frontend")
 st.markdown(
     """
 This app reads and documents codebases in **multiple programming languages**. It clones repositories,
 parses source files (Python, JavaScript, Java, C/C++, Go, Rust, PHP, HTML, CSS, etc.), and sends the
-collected source to a documentation generator (usually backed by an LLM). The UI intentionally
-hides backend details from the user — they only toggle **Use OpenAI for Documentation** and
+collected source to a documentation generator (usually backed by an LLM). Users only toggle **Use OpenAI for Documentation** and
 receive a README-style output.
 """
 )
@@ -128,7 +132,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.header("Documentation Options")
-    use_openai = st.checkbox("Use OpenAI for Documentation (recommended)", value=True)
+    use_openai = st.checkbox("Use OpenAI for Documentation", value=True)
     output_style = st.selectbox("Documentation style", options=[
         ("readme_full", "Full README (detailed overview, install, usage, examples, architecture)"),
         ("readme_short", "Short README (concise overview and usage)"),
