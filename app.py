@@ -9,7 +9,7 @@ import requests
 
 st.set_page_config(page_title="Codebase Genius — Welcome", layout="wide")
 
-st.title("Codebase Genius — Streamlit Frontend")
+st.title("Codebase Genius — Welcome")
 st.markdown(
     """
 This app reads and documents codebases in **multiple programming languages**. It clones repositories,
