@@ -7,9 +7,31 @@ import subprocess
 from typing import Dict, List, Tuple
 import requests
 
-st.set_page_config(page_title="Codebase Genius — Welcome", layout="wide")
+# Detect system theme (auto) and allow user toggle
+if "theme" not in st.session_state:
+    st.session_state.theme = "auto"
 
-st.title("Codebase Genius — Welcome")
+def get_theme():
+    if st.session_state.theme == "auto":
+        return "dark" if st.get_option("theme.base") == "dark" else "light"
+    return st.session_state.theme
+
+def set_theme(mode):
+    st.session_state.theme = mode
+
+# Apply theme toggle to page
+page_theme = get_theme()
+st.set_page_config(page_title="Codebase Genius — Streamlit Frontend", layout="wide", initial_sidebar_state="expanded")
+
+# Sidebar toggle for theme
+with st.sidebar:
+    st.markdown("### Appearance")
+    theme_choice = st.radio("Theme Mode", ["auto", "light", "dark"], index=["auto", "light", "dark"].index(st.session_state.theme), horizontal=True)
+    if theme_choice != st.session_state.theme:
+        set_theme(theme_choice)
+    st.markdown("---")
+
+st.title("Codebase Genius — Streamlit Frontend")
 st.markdown(
     """
 This app reads and documents codebases in **multiple programming languages**. It clones repositories,
@@ -21,8 +43,6 @@ receive a README-style output.
 )
 
 # ----------------------------- Config ------------------------------------
-# Backend endpoint is kept internal; users don't see or edit it. Set environment
-# variable CODEGEN_BACKEND to override the default (useful for deployment).
 BACKEND_URL = os.getenv("CODEGEN_BACKEND", "http://localhost:8000/generate-docs")
 
 # ----------------------------- Utilities ---------------------------------
@@ -77,10 +97,8 @@ def render_tree(tree: Dict, depth=0) -> str:
 # ----------------------------- Documentation call ------------------------
 
 def generate_documentation_backend(content: str, output_style: str = "readme_full") -> Tuple[bool, str]:
-    """Send source bundle to backend. Returns (success, documentation_or_error)."""
     payload = {
         "content": content,
-        # output_style hints: 'readme_short', 'readme_full', 'api_reference'
         "output_style": output_style,
     }
     try:
@@ -113,10 +131,9 @@ with st.sidebar:
     use_openai = st.checkbox("Use OpenAI for Documentation (recommended)", value=True)
     output_style = st.selectbox("Documentation style", options=[
         ("readme_full", "Full README (detailed overview, install, usage, examples, architecture)"),
-        ("readme_short", "Short README (concise overview and usage)") ,
+        ("readme_short", "Short README (concise overview and usage)"),
         ("api_reference", "API reference (functions/classes list with doc summaries)")
     ], index=0)
-    # `output_style` is a tuple because we want readable labels; pick the key
     output_style = output_style[0]
 
     st.markdown("---")
@@ -149,7 +166,6 @@ else:
         st.text_area("Structure", value=render_tree(tree), height=300)
 
         st.markdown("### Documentation Generator")
-        # Collect source files (skip large binaries) into a single string bundle
         files = []
         for f in Path(st.session_state.repo_root).rglob("*"):
             if f.is_file() and f.suffix.lower() not in [".png", ".jpg", ".jpeg", ".gif", ".svg", ".exe", ".dll"]:
@@ -159,7 +175,6 @@ else:
                 except Exception:
                     files.append({"path": str(f.relative_to(st.session_state.repo_root)), "content": "<read error>"})
 
-        # Prepare content payload: small summary + files list
         bundle = {
             "repo_name": Path(st.session_state.repo_root).name,
             "files": files,
@@ -174,7 +189,6 @@ else:
             else:
                 st.subheader("Generated Documentation (README-style)")
                 st.markdown(doc_or_err)
-                # Provide a download button
                 st.download_button("Download docs.md", data=doc_or_err, file_name=f"{bundle['repo_name']}_README.md")
         else:
             st.warning("OpenAI documentation is disabled. Toggle 'Use OpenAI for Documentation' to enable.")
