@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 import subprocess
 from typing import Dict, List, Tuple
+import openai
 
 st.set_page_config(page_title="Codebase Genius — Streamlit Frontend", layout="wide")
 
@@ -65,12 +66,29 @@ def render_tree(tree: Dict, depth=0) -> str:
             s += render_tree(v, depth + 1)
     return s
 
+
+# ----------------------------- Documentation Generator -----------------------------------
+
+def generate_documentation_with_openai(content: str, api_key: str, language: str = "English") -> str:
+    openai.api_key = api_key
+    prompt = f"Generate structured {language} markdown documentation explaining the purpose, logic, and architecture of this codebase:\n\n{content}"
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response["choices"][0]["message"]["content"]
+
+
 # ----------------------------- Main UI -----------------------------------
 
 with st.sidebar:
     st.header("Repository Input")
     repo_url = st.text_input("GitHub repo URL or local folder path:")
     tmp_dir = st.text_input("Local clone folder (optional)", value="")
+
+    st.header("Options & LLM")
+    use_openai = st.checkbox("Use OpenAI API for documentation", value=False)
+    openai_key = st.text_input("OpenAI API Key", type="password") if use_openai else None
 
     st.markdown("---")
     if st.button("Process Repository"):
@@ -101,4 +119,17 @@ else:
         tree = build_file_tree(st.session_state.repo_root)
         st.text_area("Structure", value=render_tree(tree), height=300)
 
-        st.markdown("### Done — File tree generated successfully.")
+        st.markdown("### Documentation Generator")
+        if use_openai and openai_key:
+            st.info("Generating documentation using OpenAI...")
+            all_content = "\n\n".join(
+                open(f, encoding="utf-8", errors="ignore").read()
+                for f in Path(st.session_state.repo_root).rglob("*") if f.is_file()
+            )
+            doc = generate_documentation_with_openai(all_content, openai_key)
+            st.subheader("Generated Documentation")
+            st.markdown(doc)
+        else:
+            st.warning("OpenAI integration is disabled. Enable it in the sidebar to generate full documentation.")
+
+        st.markdown("### Done — File tree and options restored successfully.")
