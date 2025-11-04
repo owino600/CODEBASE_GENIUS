@@ -14,11 +14,10 @@ if "dark_mode" not in st.session_state:
 
 def toggle_theme():
     st.session_state.dark_mode = not st.session_state.dark_mode
-    st.experimental_rerun()
 
 st.set_page_config(page_title="Codebase Genius — Streamlit Frontend", layout="wide", initial_sidebar_state="expanded")
 
-# Simple toggle button (one-click)
+# One-click light/dark mode toggle button
 if st.button("🌙 Dark Mode" if not st.session_state.dark_mode else "☀️ Light Mode"):
     toggle_theme()
 
