@@ -7,7 +7,7 @@ import subprocess
 from typing import Dict, List, Tuple
 import requests
 
-st.set_page_config(page_title="Codebase Genius — Streamlit Frontend", layout="wide")
+st.set_page_config(page_title="Codebase Genius — Welcome", layout="wide")
 
 st.title("Codebase Genius — Streamlit Frontend")
 st.markdown(
